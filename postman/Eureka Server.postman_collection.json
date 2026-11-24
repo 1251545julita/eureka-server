@@ -172,13 +172,14 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/pagos/clientes/999",
+              "raw": "{{baseUrl}}/clientes/2/cuentas/999",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "pagos",
                 "clientes",
+                "2",
+                "cuentas",
                 "999"
               ]
             },
