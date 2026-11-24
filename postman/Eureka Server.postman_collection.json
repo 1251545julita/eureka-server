@@ -1,0 +1,403 @@
+{
+  "info": {
+    "_postman_id": "1f487100-258a-4639-82fe-0f78979ea1d2",
+    "name": "Eureka Server",
+    "description": "Eureka en el 8761, servicio-clientes (proyecto-clase05) en el 8080 y, para el balanceo, una segunda instancia en el 8082; servicio-pagos en el 8081. Despues de prender un servicio, esperar un minuto antes de pedirle algo a pagos: Eureka y pagos refrescan su lista cada 30 segundos.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "4361231"
+  },
+  "item": [
+    {
+      "name": "Eureka: quien esta anotado",
+      "item": [
+        {
+          "name": "1. Registro completo en JSON - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Devuelve 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Esta anotado servicio-clientes\", function () {",
+                  "    const apps = pm.response.json().applications.application.map(a => a.name);",
+                  "    pm.expect(apps).to.include(\"SERVICIO-CLIENTES\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{eurekaUrl}}/eureka/apps",
+              "host": [
+                "{{eurekaUrl}}"
+              ],
+              "path": [
+                "eureka",
+                "apps"
+              ]
+            },
+            "description": "Slides 3 y 25. La misma lista que muestra el dashboard (http://localhost:8761), pero en JSON. Es lo que consultan los clientes de Eureka. Tiene que aparecer SERVICIO-CLIENTES; despues del bloque 8, tambien SERVICIO-PAGOS. Eureka guarda esta respuesta en un cache de 30 s: un servicio recien prendido puede tardar en aparecer aca aunque ya este en el dashboard."
+          },
+          "response": []
+        },
+        {
+          "name": "2. Instancias de product-service- 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Devuelve 200\", function () {\n    pm.response.to.have.status(200);\n});\npm.test(\"Hay al menos una instancia UP\", function () {\n    const inst = pm.response.json().application.instance;\n    pm.expect(inst.length).to.be.at.least(1);\n    pm.expect(inst[0].status).to.eql(\"UP\");\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{eurekaUrl}}/eureka/apps/PRODUCT-SERVICE",
+              "host": [
+                "{{eurekaUrl}}"
+              ],
+              "path": [
+                "eureka",
+                "apps",
+                "PRODUCT-SERVICE"
+              ]
+            },
+            "description": "Slide 26, paso 1 y 2: lo que le pregunta pagos a Eureka. Cada instancia trae ipAddr, port y status. Con el 8082 prendido tienen que ser dos."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cuentas por cliente (sin url)",
+      "item": [
+        {
+          "name": "3. Listar cuentas de un cliente a traves de Customer-Service - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Devuelve 200\", function () {\n    pm.response.to.have.status(200);\n});\npm.test(\"Trae los clientes sin cuit\", function () {\n    const lista = pm.response.json();\n    pm.expect(lista.length).to.be.at.least(6);\n    pm.expect(lista[0]).to.not.have.property(\"cuit\");\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/clientes/2/cuentas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clientes",
+                "2",
+                "cuentas"
+              ]
+            },
+            "description": "Slides 12 y 29. El @FeignClient ya no tiene url: Feign le pidio a Eureka donde esta servicio-clientes. Si da 500 con 'Load balancer does not contain an instance', esperar un minuto y volver a mandar."
+          },
+          "response": []
+        },
+        {
+          "name": "4. Una cuenta por id - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Devuelve 200\", function () {\n    pm.response.to.have.status(200);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/clientes/2/cuentas/2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clientes",
+                "2",
+                "cuentas",
+                "2"
+              ]
+            },
+            "description": "Igual que en la Clase 16, pero la direccion la resolvio Eureka."
+          },
+          "response": []
+        },
+        {
+          "name": "5. Cuentas que no existe - 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Devuelve 404\", function () {\n    pm.response.to.have.status(404);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/pagos/clientes/999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pagos",
+                "clientes",
+                "999"
+              ]
+            },
+            "description": "El try/catch de FeignException.NotFound de la Clase 16 sigue andando: Eureka no cambia nada de eso."
+          },
+          "response": []
+        },
+        {
+          "name": "6. Crear cuenta - 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Devuelve 201\", function () {\n    pm.response.to.have.status(201);\n});\npm.test(\"Queda APROBADO\", function () {\n    pm.expect(pm.response.json().estado).to.eql(\"APROBADO\");\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"Cuenta Corriente\",\n  \"moneda\": \"USD\",\n  \"clienteId\": \"2\",\n  \"saldoInicial\": 0.00,\n  \"limiteDescubierto\": 100000.00\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/clientes/cuentas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clientes",
+                "cuentas"
+              ]
+            },
+            "description": "Dos llamados de pagos a clientes (GET y POST), los dos resueltos por nombre."
+          },
+          "response": []
+        },
+        {
+          "name": "7. Actualizar cuenta - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Devuelve 201\", function () {\n    pm.response.to.have.status(201);\n});\npm.test(\"Queda APROBADO\", function () {\n    pm.expect(pm.response.json().estado).to.eql(\"APROBADO\");\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limiteDescubierto\": 1000000.00\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/clientes/2/cuentas/13",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clientes",
+                "2",
+                "cuentas",
+                "13"
+              ]
+            },
+            "description": "Dos llamados de pagos a clientes (GET y POST), los dos resueltos por nombre."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Balanceo (con la segunda instancia en el 8082)",
+      "item": [
+        {
+          "name": "8. Segunda instancia, directo al 8082 - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Devuelve 200\", function () {\n    pm.response.to.have.status(200);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientes2Url}}/cuentas/clientes/2",
+              "host": [
+                "{{clientes2Url}}"
+              ],
+              "path": [
+                "cuentas",
+                "clientes",
+                "2"
+              ]
+            },
+            "description": "Slide 28. Comprueba que la segunda copia de servicio-clientes esta viva. Es el mismo proyecto, con otro puerto, contra la misma base."
+          },
+          "response": []
+        },
+        {
+          "name": "9. Cliente 2 a traves de clientes (mandarlo varias veces) - 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Devuelve 200\", function () {\n    pm.response.to.have.status(200);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/clientes/2/cuentas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clientes",
+                "2",
+                "cuentas"
+              ]
+            },
+            "description": "Slides 28 y 29. Mandarlo 6 veces (o correr la carpeta con el Runner, 6 iteraciones) y mirar las consolas de las dos instancias de clientes: el select de Hibernate aparece una vez en cada una, alternando (round-robin). Pagos no sabe ni le importa cual contesto."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Con product-service apagado",
+      "item": [
+        {
+          "name": "10. Sin instancias de product-server- 500",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Devuelve 500\", function () {\n    pm.response.to.have.status(500);\n});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/clientes/2/cuentas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clientes",
+                "2",
+                "cuentas"
+              ]
+            },
+            "description": "Apagar las dos instancias de clientes. Si se cortaron de golpe, Eureka las sigue listando hasta 3 minutos y en la consola de pagos sale RetryableException: Connection refused. Si se despidieron (o ya vencieron), sale FeignException$ServiceUnavailable: Load balancer does not contain an instance for the service servicio-clientes. En los dos casos, 500."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "clientesUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "clientes2Url",
+      "value": "http://localhost:8082"
+    },
+    {
+      "key": "eurekaUrl",
+      "value": "http://localhost:8761"
+    }
+  ]
+}
