@@ -11,6 +11,10 @@ Servidor de registro y descubrimiento de servicios (Service Registry) basado en 
 Cada microservicio (por ejemplo **customer-service** y **product-service**) se registra acá al iniciar, y consulta
 este servidor para encontrar la ubicación de los demás, sin depender de direcciones fijas.
 
+La dirección de este servidor se distribuye a los microservicios a través del **config-server**: el archivo
+`application.yml` de **config-repo** (configuración general, común a todos) define `eureka.client.service-url.defaultZone`,
+así ningún microservicio necesita declararla por su cuenta.
+
 ---
 
 ## 2. Qué se necesita antes de empezar
@@ -18,6 +22,7 @@ este servidor para encontrar la ubicación de los demás, sin depender de direcc
 - **JDK 21** instalado.
 - **IntelliJ IDEA** (Community alcanza).
 - Este servidor **no necesita base de datos**: el registro se mantiene en memoria.
+- **config-server** y **config-repo** son necesarios para los microservicios cliente (ver punto 7), no para levantar este servidor.
 
 Versiones utilizadas:
 
@@ -37,17 +42,55 @@ Versiones utilizadas:
 3. Cuando pregunte, aceptar **Trust Project**.
 4. Verificar el JDK en `File > Project Structure > Project > SDK`: tiene que apuntar a un **JDK 21**. Si no aparece ninguno, elegir `Add SDK > Download JDK` y descargar una distribución 21.
 5. Si no ve el panel de Maven: `View > Tool Windows > Maven`, y tocar el botón de recargar.
-6. En `application.yml` (o `application.properties`) verificar el puerto del servidor (`server.port: 8761`).
+6. En `src/main/resources/application.yml` verificar el puerto del servidor (`server.port: 8761`).
 
 **Si el `pom.xml` aparece en gris o no hay carpeta `External Libraries`:** clic derecho
 sobre `pom.xml` → **Add as Maven Project**.
 
 ---
 
-## 4. Cómo ejecutarlo
+## 4. Configuración
 
-> **Orden:** primero levantar **eureka-server** (puerto 8761), después **product-service** (puerto 8082)
-> y por último **customer-service** (puerto 8081).
+### En este proyecto: `application.yml`
+
+Eureka Server tiene su propia configuración local, que **no** viene del config-server:
+
+```yaml
+spring:
+  application:
+    name: eureka-server
+
+server:
+  port: 8761
+
+eureka:
+  client:
+    register-with-eureka: false   # el servidor no se registra a sí mismo
+    fetch-registry: false         # ni descarga el registro
+```
+
+### En config-repo: configuración general
+
+La dirección de Eureka la define el archivo general de config-repo (`application.yml`), que el config-server entrega
+a **todos** los microservicios:
+
+```yaml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+```
+
+Además, config-repo tiene un archivo `.yml` por cada microservicio (por ejemplo `product-service.yml`,
+`customer-service.yml`) con su configuración específica. Eureka Server no tiene archivo propio ahí.
+
+---
+
+## 5. Cómo ejecutarlo
+
+> **Orden:** primero **config-server** (puerto 8888) y **eureka-server** (puerto 8761), después
+> **product-service** (puerto 8082) y por último **customer-service** (puerto 8081).
+> Los microservicios necesitan que los dos primeros estén activos.
 
 ### Desde IntelliJ
 
@@ -90,7 +133,7 @@ java -jar target/eureka-server-0.0.1-SNAPSHOT.jar
 
 ---
 
-## 5. Cómo verificar que funciona
+## 6. Cómo verificar que funciona
 
 Con la aplicación levantada, abrí en el navegador el panel de Eureka:
 
@@ -107,35 +150,42 @@ curl -i -H "Accept: application/json" http://localhost:8761/eureka/apps
 
 > **Qué significa el `-i`:** muestra también los encabezados de la respuesta, incluido el código de estado.
 
+Para comprobar que el config-server entrega la dirección de Eureka a los microservicios:
+
+```bash
+curl -i http://localhost:8888/product-service/default
+```
+
+En la respuesta tiene que aparecer `eureka.client.service-url.defaultZone` junto con las propiedades propias de product-service.
+
 ---
 
-## 6. Cómo registrar un microservicio
+## 7. Cómo se registra un microservicio
 
-Cada microservicio cliente necesita la dependencia `spring-cloud-starter-netflix-eureka-client`
-y esta configuración en su `application.yml`:
+Cada microservicio cliente necesita la dependencia `spring-cloud-starter-netflix-eureka-client` y apuntar al
+config-server en su `application.yml`:
 
 ```yaml
 spring:
   application:
     name: customer-service     # nombre con el que aparece en Eureka
-
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
+  config:
+    import: "optional:configserver:http://localhost:8888"
 ```
+
+El `defaultZone` **no** se declara en el microservicio: llega desde el `application.yml` general de config-repo.
 
 Al iniciar, el servicio aparece en el panel con su nombre en mayúsculas (por ejemplo `CUSTOMER-SERVICE`).
 
 ---
 
-## 7. Estructura del proyecto
+## 8. Estructura del proyecto
 
 ```
 eureka-server/
 ├── pom.xml
 ├── README.md
-├── src/main/resources/application.yml       # Puerto y configuración del servidor Eureka
+├── src/main/resources/application.yml       # Puerto y configuración propia del servidor Eureka
 ├── src/test/*                               # Tests de arranque de la aplicación
 └── src/main/java/ar/edu/utn/diplomatura/eurekaserver/
     └── EurekaServerApplication.java         # Clase principal, anotada con @EnableEurekaServer
@@ -143,33 +193,42 @@ eureka-server/
 
 ---
 
-## 8. Arquitectura
+## 9. Arquitectura
 
 ```
-                      ┌──────────────────────────┐
-                      │  eureka-server (:8761)   │
-                      │  registro de servicios   │
-                      └───────▲──────────▲───────┘
-                  registra y  │          │  registra y
-                  consulta    │          │  consulta
-          ┌───────────────────┴──┐   ┌───┴───────────────────┐
-          │ customer-service     │──>│ product-service       │
-          │ (:8081 /clientes)    │   │ (:8082 /cuentas)      │
-          └──────────────────────┘   └───────────────────────┘
+config-repo (git)
+  ├── application.yml        # general: defaultZone de Eureka
+  ├── product-service.yml
+  └── customer-service.yml
+        │
+        ▼
+config-server (:8888) ── entrega configuración ──┐
+                                                  ▼
+                        product-service (:8082)   customer-service (:8081)
+                                  │                       │
+                                  └─ se registran y consultan ─┐
+                                                               ▼
+                                                   eureka-server (:8761)
 ```
+
+- **config-repo** guarda la configuración general y la de cada microservicio.
+- **config-server** la sirve a los microservicios, incluida la URL de Eureka.
+- **eureka-server** mantiene el registro de qué servicios están activos y dónde.
 
 ---
 
-## 9. Problemas frecuentes
+## 10. Problemas frecuentes
 
 **`error: invalid source release: 21`.** El JDK configurado es anterior a 21. Revisá el punto 3.
 
 **El botón ▶ no aparece al lado del `main`.** IntelliJ todavía no terminó de indexar, o no reconoció la carpeta como proyecto Maven. Esperá a que termine la barra de progreso de abajo, o recargá el proyecto desde el panel de Maven.
 
-**`Port 8761 was already in use`.** Hay otra aplicación usando ese puerto. Cerrala o cambiá `server.port` en `application.yml`.
+**`Port 8761 was already in use`.** Hay otra aplicación usando ese puerto. Cerrala o cambiá `server.port` en `application.yml`. Si lo cambiás, actualizá también el `defaultZone` en config-repo.
 
-**En los logs aparece `Cannot execute request on any known server` o `Connection refused`.** Por defecto, Eureka Server intenta registrarse a sí mismo como cliente. En `application.yml` agregá `eureka.client.register-with-eureka: false` y `eureka.client.fetch-registry: false`.
+**En los logs aparece `Cannot execute request on any known server` o `Connection refused`.** Eureka Server intenta registrarse a sí mismo como cliente. Verificá que `eureka.client.register-with-eureka` y `eureka.client.fetch-registry` estén en `false` en el `application.yml` de este proyecto.
 
-**Un microservicio no aparece en el panel.** Revisá que eureka-server esté levantado **antes**, que el `defaultZone` apunte a `http://localhost:8761/eureka/` y que el servicio tenga `spring.application.name`.
+**Un microservicio no aparece en el panel.** Revisá que eureka-server esté levantado **antes**, que el config-server entregue el `defaultZone` (punto 6) y que el servicio tenga `spring.application.name`. Recordá que config-server lee de git lo que está commiteado: si cambiaste `application.yml` en config-repo, hacé commit y reiniciá el microservicio.
+
+**El microservicio falla con `Could not locate PropertySource`.** El config-server no está levantado o respondió con error. Probá `curl -i http://localhost:8888/product-service/default` y, si da 500, revisá la consola del config-server.
 
 **Los acentos se ven como `?` o `�` en la consola.** Pasa en `cmd` y en PowerShell por el codepage de Windows. Corré `chcp 65001` antes de ejecutar, o usá la consola de IntelliJ.
